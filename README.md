@@ -61,6 +61,9 @@ Intramolecular interactions are derived from structural ensembles using **Boltzm
 
 ## Coarse-Grained Molecular Dynamics
 
+Run it with:
+     sbatch --job-name=ml_sim_1uao submit_sim.sh 1uao
+
 The resulting intermolecular and intramolecular potentials are used directly for coarse-grained molecular dynamics simulations. The generated trajectories can subsequently be analysed to assess structural stability, folding behaviour, and conformational dynamics.
 
 Detailed information on the implementation, available scripts, and analysis procedures is provided in the `src/` documentation.
