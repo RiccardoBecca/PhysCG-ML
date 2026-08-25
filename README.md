@@ -1,4 +1,5 @@
 # PhysCG-ML
+
 # Physics-Informed Machine Learning Coarse-Grained Potential
 
 This repository develops a **physics-informed machine learning potential for coarse-grained molecular dynamics (CGMD)**.
@@ -9,24 +10,25 @@ The approach combines a physically motivated analytical interaction model with m
 
 The intermolecular interaction between two coarse-grained beads is defined as
 
-[
+$$
 U(r) = U_{\mathrm{TT}}(r) + U_{\mathrm{DH}}(r),
-]
+$$
 
-with a Tang–Toennies-type van der Waals term
+with a Tang--Toennies-type van der Waals term
 
-[
+$$
 U_{\mathrm{TT}}(r)
 ==================
 
 ## \left(\frac{C_{\mathrm{rep}}}{r}\right)^{10}
 
-f_6(br)\left(\frac{C_{\mathrm{att}}}{r}\right)^6,
-]
+f_6(br)
+\left(\frac{C_{\mathrm{att}}}{r}\right)^6,
+$$
 
-where
+where the Tang--Toennies damping function is
 
-[
+$$
 f_6(x)
 ======
 
@@ -37,29 +39,35 @@ f_6(x)
 +\frac{x^4}{24}
 +\frac{x^5}{120}
 +\frac{x^6}{720}
-\right),
-]
+\right).
+$$
 
-and a Debye–Hückel electrostatic term
+The electrostatic contribution is described by a Debye--Hückel term
 
-[
+$$
 U_{\mathrm{DH}}(r)
 ==================
 
 C_{\mathrm{mix}}
-\frac{138.935456,q_1q_2}{\epsilon_r r}
+\frac{138.935456,q_1q_2}
+{\epsilon_r r}
 e^{-\kappa r}.
-]
+$$
 
 The distinguishing feature of the model is that the parameters
 
-[
-C_{\mathrm{rep}},\quad C_{\mathrm{att}},\quad b,\quad C_{\mathrm{mix}}
-]
+$$
+C_{\mathrm{rep}},\quad
+C_{\mathrm{att}},\quad
+b,\quad
+C_{\mathrm{mix}}
+$$
 
-are not represented by scalar values. Each is represented by a **multi-component parameter vector**, and the interaction parameters between two beads are obtained through component-wise mixing rules. For two beads (i) and (j),
+are not represented by scalar values. Instead, each parameter is represented by a **multi-component parameter vector**. The interaction parameters between two coarse-grained beads are then obtained through component-wise mixing rules.
 
-[
+For two beads $i$ and $j$, the mixed parameters are defined as
+
+$$
 C_{\mathrm{rep}}^{ij}
 =====================
 
@@ -69,20 +77,21 @@ C_{\mathrm{rep}}^{ij}
 C_{\mathrm{rep},k}^{(i)}
 C_{\mathrm{rep},k}^{(j)}
 },
-]
+$$
 
-[
+$$
 b^{ij}
 ======
 
 \sqrt{
 \frac{1}{3}
 \sum_k
-b_k^{(i)}b_k^{(j)}
+b_k^{(i)}
+b_k^{(j)}
 },
-]
+$$
 
-[
+$$
 C_{\mathrm{att}}^{ij}
 =====================
 
@@ -92,20 +101,21 @@ C_{\mathrm{att}}^{ij}
 C_{\mathrm{att},k}^{(i)}
 C_{\mathrm{att},k}^{(j)}
 },
-]
+$$
 
 and
 
-[
+$$
 C_{\mathrm{mix}}^{ij}
 =====================
 
 \sqrt{
 \frac{1}{3}
 \sum_k
-C_k^{(i)}C_k^{(j)}
+C_k^{(i)}
+C_k^{(j)}
 }.
-]
+$$
 
 Thus, the physical functional form of the potential is explicitly constrained, while machine learning determines the underlying multi-component parameters. This provides a physics-informed alternative to learning an unconstrained black-box energy function.
 
