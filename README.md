@@ -1,6 +1,5 @@
 # PhysCG-ML
 
-# Physics-Informed Machine Learning Coarse-Grained Potential
 
 This repository develops a **physics-informed machine learning potential for coarse-grained molecular dynamics (CGMD)**.
 
@@ -39,59 +38,15 @@ b,\quad
 C_{\mathrm{mix}}
 $$
 
-are not represented by scalar values. Instead, each parameter is represented by a **multi-component parameter vector**. The interaction parameters between two coarse-grained beads are then obtained through component-wise mixing rules.
-
-For two beads $i$ and $j$, the mixed parameters are defined as
-
-$$
-C_{\mathrm{rep}}^{ij}
-=====================
-
-\sqrt{
-\frac{1}{3}
-\sum_k
-C_{\mathrm{rep},k}^{(i)}
-C_{\mathrm{rep},k}^{(j)}
-},
-$$
-
-$$
-b^{ij}
-======
-
-\sqrt{
-\frac{1}{3}
-\sum_k
-b_k^{(i)}
-b_k^{(j)}
-},
-$$
-
-$$
-C_{\mathrm{att}}^{ij}
-=====================
-
-\sqrt{
-\frac{1}{3}
-\sum_k
+are not represented by scalar values. Instead, each parameter is represented by a **multi-component parameter vector**. The interaction parameters between two coarse-grained beads are then obtained through component-wise mixing rules. E.g. for two beads $i$ and $j$, the mixed parameters are defined as: 
+$$ 
+C_{\mathrm{att}}^{ij} \sqrt{
+\frac{1}{N}
+\sum_k^N
 C_{\mathrm{att},k}^{(i)}
 C_{\mathrm{att},k}^{(j)}
 },
-$$
-
-and
-
-$$
-C_{\mathrm{mix}}^{ij}
-=====================
-
-\sqrt{
-\frac{1}{3}
-\sum_k
-C_k^{(i)}
-C_k^{(j)}
-}.
-$$
+$
 
 Thus, the physical functional form of the potential is explicitly constrained, while machine learning determines the underlying multi-component parameters. This provides a physics-informed alternative to learning an unconstrained black-box energy function.
 
