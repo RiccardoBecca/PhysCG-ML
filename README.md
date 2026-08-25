@@ -17,14 +17,9 @@ $$
 with a Tang--Toennies-type van der Waals term
 
 $$
-U_{\mathrm{TT}}(r)
-==================
-
-## \left(\frac{C_{\mathrm{rep}}}{r}\right)^{10}
-
-f_6(br)
-\left(\frac{C_{\mathrm{att}}}{r}\right)^6,
+U_{\mathrm{TT}}(r) = \left(\frac{C_{\mathrm{rep}}}{r}\right)^{10} *  f_6(br) * \left(\frac{C_{\mathrm{att}}}{r}\right)^6,
 $$
+
 
 where the Tang--Toennies damping function is
 
