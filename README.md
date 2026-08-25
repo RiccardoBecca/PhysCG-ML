@@ -6,7 +6,7 @@ This repository develops a **physics-informed machine learning potential for coa
 The approach combines a physically motivated analytical interaction model with machine-learned parameters. The functional form of the intermolecular potential is fixed according to the relevant physical interactions, while the parameters of this function are learned from data.
 
 <p align="center">
-  <img src="chignolin" alt="Chignolin example" width="800"/>
+  <img src="chignolin" alt="Chignolin example" width="500"/>
 </p>
 
 ## Physics-Informed ML Potential
