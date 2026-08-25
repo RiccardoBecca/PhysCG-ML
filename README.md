@@ -20,7 +20,7 @@ U_{\mathrm{TT}}(r) = \left(\frac{C_{\mathrm{rep}}}{r}\right)^{10} \cdot  f_6(br)
 $$
 
 
-where the Tang--Toennies damping function is $f_6(x)=1-e^{-x}\cdot \sum_{k=0}^6\frac{x^k}{k!}
+where the Tang--Toennies damping function is $f_6(x)=1-e^{-x}\cdot \sum_{k=0}^6\frac{x^k}{k!}$
 
 The electrostatic contribution is described by a Debye--Hückel term
 
