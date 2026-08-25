@@ -26,7 +26,7 @@ where the Tang--Toennies damping function is $f_6(x)=1-e^{-x}\cdot \sum_{k=0}^6\
 The electrostatic contribution is described by a Debye--Hückel term
 
 $$
-U_{\mathrm{DH}}(r) = C_{\mathrm{mix}}\cdot\frac{138.935456,q_1q_2}{\epsilon_r r}e^{-\kappa r}
+U_{\mathrm{DH}}(r) = C_{\mathrm{mix}}\cdot\frac{q_1q_2}{4\pi\epsilon_0\epsilon_r r}e^{-\kappa r}
 $$
 
 
