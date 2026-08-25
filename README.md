@@ -39,6 +39,7 @@ C_{\mathrm{mix}}
 $$
 
 are not represented by scalar values. Instead, each parameter is represented by a **multi-component parameter vector**. The interaction parameters between two coarse-grained beads are then obtained through component-wise mixing rules. E.g. for two beads $i$ and $j$, the mixed parameters are defined as: 
+
 $$ 
 C_{\mathrm{att}}^{ij} \sqrt{
 \frac{1}{N}
@@ -46,7 +47,7 @@ C_{\mathrm{att}}^{ij} \sqrt{
 C_{\mathrm{att},k}^{(i)}
 C_{\mathrm{att},k}^{(j)}
 },
-$
+$$
 
 Thus, the physical functional form of the potential is explicitly constrained, while machine learning determines the underlying multi-component parameters. This provides a physics-informed alternative to learning an unconstrained black-box energy function.
 
