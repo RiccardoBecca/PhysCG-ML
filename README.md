@@ -17,37 +17,18 @@ $$
 with a Tang--Toennies-type van der Waals term
 
 $$
-U_{\mathrm{TT}}(r) = \left(\frac{C_{\mathrm{rep}}}{r}\right)^{10} *  f_6(br) * \left(\frac{C_{\mathrm{att}}}{r}\right)^6,
+U_{\mathrm{TT}}(r) = \left(\frac{C_{\mathrm{rep}}}{r}\right)^{10} \cdot  f_6(br) \cdot \left(\frac{C_{\mathrm{att}}}{r}\right)^6,
 $$
 
 
-where the Tang--Toennies damping function is
-
-$$
-f_6(x)
-======
-
-1-e^{-x}
-\left(
-1+x+\frac{x^2}{2}
-+\frac{x^3}{6}
-+\frac{x^4}{24}
-+\frac{x^5}{120}
-+\frac{x^6}{720}
-\right).
-$$
+where the Tang--Toennies damping function is $f_6(x)=1-e^{-x}\cdot \sum_{k=0}^6\frac{x^k}{k!}
 
 The electrostatic contribution is described by a Debye--Hückel term
 
 $$
-U_{\mathrm{DH}}(r)
-==================
-
-C_{\mathrm{mix}}
-\frac{138.935456,q_1q_2}
-{\epsilon_r r}
-e^{-\kappa r}.
+U_{\mathrm{DH}}(r) = C_{\mathrm{mix}}\cdot\frac{138.935456,q_1q_2}{\epsilon_r r}e^{-\kappa r}
 $$
+
 
 The distinguishing feature of the model is that the parameters
 
