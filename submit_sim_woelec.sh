@@ -9,7 +9,7 @@
 # Use the first command line argument, or default to "default" if omitted
 SYSTEM_NAME="${1:-default}"
 
-JOB_ID_NAME="ml_sim_${SYSTEM_NAME}"
+JOB_ID_NAME="ml_sim_${SYSTEM_NAME}_woel"
 
 # Ensure the logs directory exists
 mkdir -p logs

@@ -83,5 +83,11 @@ python src/run_tica_fel.py \
     --eq_steps $((STEPS / 10))
 
 
+# Study fold based on first-last distance and similar
+python src/compute_fold.py \
+    --xyz "$OUTPUT_XYZ" \
+    --out "EXP/${SYSTEM_NAME}/analysis_plots/fold_prop.png" \
+    --lag 100
+
 
 
