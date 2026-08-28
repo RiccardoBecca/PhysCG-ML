@@ -5,24 +5,6 @@ import matplotlib.pyplot as plt
 from scipy.spatial.distance import pdist
 from scipy.linalg import eigh
 
-def kabsch_align(mobile_all: np.ndarray, mobile_bb: np.ndarray, ref_bb: np.ndarray):
-    """Aligns all atoms in a frame to ref_bb using optimal backbone rotation (Kabsch algorithm)."""
-    c_mobile = np.mean(mobile_bb, axis=0)
-    c_ref = np.mean(ref_bb, axis=0)
-    
-    P = mobile_bb - c_mobile
-    Q = ref_bb - c_ref
-    
-    H = P.T @ Q
-    U, S, Vt = np.linalg.svd(H)
-    R = Vt.T @ U.T
-    
-    if np.linalg.det(R) < 0:
-        Vt[2, :] *= -1
-        R = Vt.T @ U.T
-        
-    return (mobile_all - c_mobile) @ R + c_ref
-
 def parse_xyz_backbone_trajectory(xyz_path: str):
     """Parses XYZ trajectory and extracts coordinates for ONLY 'B' atoms per frame."""
     frames_bb = []
@@ -67,15 +49,12 @@ def parse_xyz_backbone_trajectory(xyz_path: str):
             
     return np.array(steps), np.array(frames_bb)
 
-def parse_pdb_crystal(pdb_path: str):
-    """Parses PDB file to extract 'B' bead coordinates and raw PDB template lines."""
+def parse_pdb_backbone(pdb_path: str):
+    """Parses a PDB file and extracts coordinates for ONLY 'B' backbone atoms."""
     bb_coords = []
-    pdb_lines = []
-    
     with open(pdb_path, 'r') as f:
         for line in f:
             if line.startswith(('ATOM', 'HETATM')):
-                pdb_lines.append(line)
                 atom_name = line[12:16].strip()
                 if atom_name == 'B':
                     try:
@@ -84,38 +63,49 @@ def parse_pdb_crystal(pdb_path: str):
                         z = float(line[46:54])
                         bb_coords.append([x, y, z])
                     except (ValueError, IndexError):
+                        # Fallback for space-separated format
                         parts = line.split()
                         if len(parts) >= 9:
                             bb_coords.append([float(parts[6]), float(parts[7]), float(parts[8])])
-                            
-    return np.array(bb_coords), pdb_lines
+    return np.array(bb_coords)
 
 def fit_transform_tica(features: np.ndarray, lag: int = 10, n_components: int = 2):
-    """Performs Time-lagged Independent Component Analysis (TICA)."""
+    """
+    Performs Time-lagged Independent Component Analysis (TICA).
+    """
     N = len(features)
     if N <= lag:
         raise ValueError(f"Trajectory length ({N}) must be greater than lag time ({lag}).")
 
+    # 1. Mean-center features
     mean_feat = np.mean(features, axis=0)
     X = features - mean_feat
 
+    # 2. Time-lagged data splits
     X_0 = X[:-lag]
     X_tau = X[lag:]
 
+    # 3. Calculate zero-lag covariance matrix C(0)
     C_0 = (X_0.T @ X_0 + X_tau.T @ X_tau) / (2.0 * (N - lag))
-    C_tau = (X_0.T @ X_tau) / (N - lag)
-    C_tau = (C_tau + C_tau.T) / 2.0
 
+    # 4. Calculate time-lagged covariance matrix C(tau)
+    C_tau = (X_0.T @ X_tau) / (N - lag)
+    C_tau = (C_tau + C_tau.T) / 2.0  # Symmetrize
+
+    # 5. Solve generalized eigenvalue problem: C_tau * v = lambda * C_0 * v
     C_0 += 1e-6 * np.eye(C_0.shape[0])
     eigvals, eigvecs = eigh(C_tau, C_0)
 
+    # 6. Sort eigenvalues & eigenvectors in descending order
     idx = np.argsort(eigvals)[::-1]
     eigvals = eigvals[idx]
     eigvecs = eigvecs[:, idx]
 
+    # Select top components
     top_vecs = eigvecs[:, :n_components]
     top_eigvals = eigvals[:n_components]
 
+    # 7. Project full features onto TICs
     tic_projection = X @ top_vecs
 
     return mean_feat, top_vecs, top_eigvals, tic_projection
@@ -124,15 +114,20 @@ def apply_tica(features: np.ndarray, mean_feat: np.ndarray, top_vecs: np.ndarray
     """Applies a previously fitted TICA model to new features."""
     return (features - mean_feat) @ top_vecs
 
-def extract_and_align_frames(input_xyz: str, target_indices: set, ref_bb: np.ndarray, out_dir: str, file_prefix: str, pdb_template: list = None):
+def extract_frames_to_xyz(input_xyz: str, target_indices: list, output_xyz: str):
     """
-    Extracts frames, aligns them to ref_bb, and saves INDIVIDUAL aligned XYZ and PDB files.
+    Reads the original XYZ file and writes out full frames matching target_indices.
+    Creates missing output directories automatically.
     """
-    os.makedirs(out_dir, exist_ok=True)
+    target_indices = set(target_indices)
     current_frame = 0
-    extracted_count = 0
-
-    with open(input_xyz, 'r') as f_in:
+    
+    # Ensure output directory exists
+    out_dir = os.path.dirname(output_xyz)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    
+    with open(input_xyz, 'r') as f_in, open(output_xyz, 'w') as f_out:
         while True:
             line = f_in.readline()
             if not line:
@@ -140,57 +135,22 @@ def extract_and_align_frames(input_xyz: str, target_indices: set, ref_bb: np.nda
             line = line.strip()
             if not line:
                 continue
-
+                
             try:
                 num_atoms = int(line)
             except ValueError:
                 continue
-
+                
             header = f_in.readline()
-            atom_lines = [f_in.readline().split() for _ in range(num_atoms)]
-
+            atoms = [f_in.readline() for _ in range(num_atoms)]
+            
             if current_frame in target_indices:
-                names = [a[0] for a in atom_lines]
-                all_coords = np.array([[float(a[1]), float(a[2]), float(a[3])] for a in atom_lines])
-
-                bb_mask = np.array([name == 'B' for name in names])
-                mobile_bb = all_coords[bb_mask]
-
-                # 1. Align coordinates to reference structure
-                aligned_coords = kabsch_align(all_coords, mobile_bb, ref_bb)
-
-                # Set up individual file paths
-                xyz_out_path = os.path.join(out_dir, f"{file_prefix}_sample{extracted_count + 1}_frame{current_frame}.xyz")
-                pdb_out_path = os.path.join(out_dir, f"{file_prefix}_sample{extracted_count + 1}_frame{current_frame}.pdb")
-
-                # 2. Write individual aligned XYZ file
-                with open(xyz_out_path, 'w') as f_xyz:
-                    f_xyz.write(f"{num_atoms}\n")
-                    f_xyz.write(f"Aligned Frame {current_frame} | {header}")
-                    for name, xyz in zip(names, aligned_coords):
-                        f_xyz.write(f"{name:5s} {xyz[0]:12.6f} {xyz[1]:12.6f} {xyz[2]:12.6f}\n")
-
-                # 3. Write individual PDB file (renaming 'B' to 'CA' for PyMOL)
-                with open(pdb_out_path, 'w') as f_pdb:
-                    if pdb_template and len(pdb_template) == num_atoms:
-                        for t_line, xyz in zip(pdb_template, aligned_coords):
-                            if t_line[12:16].strip() == 'B':
-                                res_line = t_line[:12] + " CA " + t_line[16:30]
-                                f_pdb.write(f"{res_line}{xyz[0]:8.3f}{xyz[1]:8.3f}{xyz[2]:8.3f}{t_line[54:]}")
-                    else:
-                        ca_idx = 1
-                        for name, xyz in zip(names, aligned_coords):
-                            if name == 'B':
-                                f_pdb.write(f"ATOM  {ca_idx:5d}  CA  GLY A{ca_idx:4d}    {xyz[0]:8.3f}{xyz[1]:8.3f}{xyz[2]:8.3f}  1.00  0.00          \n")
-                                ca_idx += 1
-
-                extracted_count += 1
-                # Optimization: Stop reading trajectory early if we've found all targets
-                if extracted_count == len(target_indices):
-                    break
-
+                f_out.write(f"{num_atoms}\n")
+                f_out.write(header)
+                for atom_line in atoms:
+                    f_out.write(atom_line)
+                    
             current_frame += 1
-
 
 def main():
     parser = argparse.ArgumentParser(description="Compute TICA and Free Energy Landscape for CG backbone trajectory.")
@@ -206,20 +166,26 @@ def main():
     parser.add_argument("--load_tica", help="Path to load pre-fitted TICA model (.npz format)")
     
     # Configuration Extraction Arguments
-    parser.add_argument("--extract_centers", nargs="+", help="List of TIC1,TIC2 coordinates to extract configurations from")
+    parser.add_argument("--extract_centers", nargs="+", help="List of TIC1,TIC2 coordinates to extract configurations from (e.g., '0.5,-0.7' '0.2,1.7')")
     parser.add_argument("--samples", type=int, default=10, help="Number of configurations to extract per center (default: 10)")
-    parser.add_argument("--extract_prefix", default="state", help="Prefix/path for extracted filenames")
+    parser.add_argument("--extract_prefix", default="state", help="Prefix/path for extracted xyz filenames")
     
-    # Crystal Reference PDB
-    parser.add_argument("--crystal", help="Path to reference CG crystal structure PDB file")
+    # Optional Crystal Reference PDB Argument
+    parser.add_argument("--crystal", help="Path to reference CG crystal structure PDB file (plots reference as a STAR)")
     
     args = parser.parse_args()
+
+    # Ensure plot directory exists
+    plot_dir = os.path.dirname(args.out)
+    if plot_dir:
+        os.makedirs(plot_dir, exist_ok=True)
 
     # 1. Load Backbone Trajectory
     print(f"Loading trajectory from: {args.xyz}")
     steps, bb_coords = parse_xyz_backbone_trajectory(args.xyz)
     total_frames = len(steps)
     
+    # Filter out equilibration steps
     valid_indices = steps >= args.eq_steps
     steps = steps[valid_indices]
     bb_coords = bb_coords[valid_indices]
@@ -236,7 +202,7 @@ def main():
     for i in range(n_frames):
         feature_matrix[i] = pdist(bb_coords[i], metric='euclidean')
 
-    # 3. Handle TICA
+    # 3. Handle TICA (Load or Fit)
     if args.load_tica:
         print(f"Loading pre-fitted TICA model from: {args.load_tica}...")
         tica_data = np.load(args.load_tica)
@@ -244,6 +210,7 @@ def main():
         top_vecs = tica_data['top_vecs']
         eigenvalues = tica_data['eigvals']
         tics = apply_tica(feature_matrix, mean_feat, top_vecs)
+        print("TICA projection complete.")
     else:
         if n_frames <= args.lag:
             raise ValueError(f"Not enough frames left after discarding equilibration ({n_frames}) to support lag time ({args.lag}).")
@@ -252,28 +219,30 @@ def main():
         mean_feat, top_vecs, eigenvalues, tics = fit_transform_tica(feature_matrix, lag=args.lag, n_components=2)
         
         if args.save_tica:
+            save_dir = os.path.dirname(args.save_tica)
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
+            print(f"Saving TICA model to: {args.save_tica}...")
             np.savez(args.save_tica, mean_feat=mean_feat, top_vecs=top_vecs, eigvals=eigenvalues)
             
     print(f"Top 2 TICA Eigenvalues: TIC1 = {eigenvalues[0]:.4f}, TIC2 = {eigenvalues[1]:.4f}")
 
-    # 4. Optional Crystal Structure Reference
+    # 4. Process Optional Crystal Structure
     crystal_tic = None
-    crystal_bb_coords = None
-    pdb_template = None
-    
     if args.crystal:
         print(f"Loading reference crystal structure from: {args.crystal}")
-        crystal_bb_coords, pdb_template = parse_pdb_crystal(args.crystal)
+        crystal_bb_coords = parse_pdb_backbone(args.crystal)
         if len(crystal_bb_coords) != n_beads:
-            raise ValueError(f"Bead count mismatch: Trajectory has {n_beads} 'B' beads, Crystal has {len(crystal_bb_coords)} 'B' beads.")
+            raise ValueError(
+                f"Bead count mismatch: trajectory has {n_beads} 'B' beads, "
+                f"but crystal PDB has {len(crystal_bb_coords)} 'B' beads."
+            )
         crystal_features = pdist(crystal_bb_coords, metric='euclidean')
         crystal_tic = apply_tica(crystal_features.reshape(1, -1), mean_feat, top_vecs)[0]
+        print(f"Crystal PDB projected onto TIC space: TIC1 = {crystal_tic[0]:.4f}, TIC2 = {crystal_tic[1]:.4f}")
 
-    # Reference backbone for RMSD superposition
-    ref_bb = crystal_bb_coords if crystal_bb_coords is not None else bb_coords[0]
-
-    # 5. Free Energy Landscape Computation
-    kB = 0.0019872042
+    # 5. Compute 2D Free Energy Landscape (FEL)
+    kB = 0.0019872042  # kcal/(mol*K)
     kT = kB * args.temp
 
     counts, xedges, yedges = np.histogram2d(tics[:, 0], tics[:, 1], bins=args.bins, density=True)
@@ -288,32 +257,40 @@ def main():
     # 6. Plotting
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
+    # Subplot 1: Trajectory Projection
     sc = ax1.scatter(tics[:, 0], tics[:, 1], c=steps, cmap='plasma', s=1, alpha=0.7)
     ax1.set_xlabel('TIC 1', fontsize=12)
     ax1.set_ylabel('TIC 2', fontsize=12)
     ax1.set_title('Production Trajectory Projection on TIC Space', fontsize=14)
-    fig.colorbar(sc, ax=ax1, label='Simulation Step')
+    cbar1 = fig.colorbar(sc, ax=ax1)
+    cbar1.set_label('Simulation Step', fontsize=11)
     ax1.grid(True, linestyle=':', alpha=0.5)
 
+    # Subplot 2: Free Energy Landscape Contours
     X_grid, Y_grid = np.meshgrid(xcenters, ycenters)
     contour = ax2.contourf(X_grid, Y_grid, free_energy.T, levels=20, cmap='jet_r')
     ax2.set_xlabel('TIC 1', fontsize=12)
     ax2.set_ylabel('TIC 2', fontsize=12)
     ax2.set_title(f'Free Energy Landscape (kcal/mol at {args.temp}K)', fontsize=14)
-    fig.colorbar(contour, ax=ax2, label='Free Energy (kcal/mol)')
+    cbar2 = fig.colorbar(contour, ax=ax2)
+    cbar2.set_label('Free Energy (kcal/mol)', fontsize=11)
     ax2.grid(True, linestyle=':', alpha=0.3)
 
+    # Plot extracted center targets (X markers)
     if args.extract_centers:
         for i, center in enumerate(args.extract_centers):
             try:
                 cx, cy = map(float, center.split(','))
-                ax2.scatter(cx, cy, c='red', marker='x', s=100, linewidths=2, zorder=9)
+                label = "Extracted State Center" if i == 0 else None
+                ax2.scatter(cx, cy, c='red', marker='x', s=100, linewidths=2, label=label, zorder=9)
             except ValueError:
                 pass
 
+    # Plot Crystal PDB Position (STAR marker)
     if crystal_tic is not None:
         ax1.scatter(crystal_tic[0], crystal_tic[1], c='gold', marker='*', s=250, edgecolor='black', linewidth=1.2, zorder=10, label='Crystal Structure')
         ax1.legend(loc='upper right')
+        
         ax2.scatter(crystal_tic[0], crystal_tic[1], c='gold', marker='*', s=250, edgecolor='black', linewidth=1.2, zorder=10, label='Crystal Structure')
         ax2.legend(loc='upper right')
 
@@ -321,39 +298,26 @@ def main():
     plt.savefig(args.out, dpi=300)
     print(f"TICA Free Energy Landscape saved to: {args.out}\n")
 
-    # 7. Extract & Align Configurations
+    # 7. Extract Configurations
     if args.extract_centers:
         absolute_indices = np.arange(total_frames)[valid_indices]
         
-        # Determine base directory and prefix
-        base_out_dir = os.path.dirname(args.extract_prefix)
-        if not base_out_dir:
-            base_out_dir = "."
-        base_prefix = os.path.basename(args.extract_prefix)
-        
         for i, center_str in enumerate(args.extract_centers):
             try:
-                # Keep coordinates as strings for the directory name, convert to float for math
-                c1_str, c2_str = center_str.split(',')
-                c1, c2 = float(c1_str), float(c2_str)
+                c1, c2 = map(float, center_str.split(','))
             except ValueError:
-                print(f"Skipping invalid center format: {center_str}. Use TIC1,TIC2 format.")
+                print(f"Error parsing center '{center_str}'. Make sure format is X,Y (e.g. 0.5,-0.7). Skipping.")
                 continue
 
             distances = np.linalg.norm(tics[:, :2] - np.array([c1, c2]), axis=1)
             closest_idx_in_production = np.argsort(distances)[:args.samples]
-            target_absolute_indices = set(absolute_indices[closest_idx_in_production])
+            target_absolute_indices = absolute_indices[closest_idx_in_production]
             
-            # Create specific directory for this TICA state based on coordinates
-            state_dir_name = f"TIC1_{c1_str}_TIC2_{c2_str}"
-            state_dir = os.path.join(base_out_dir, state_dir_name)
+            out_filename = f"{args.extract_prefix}_center{i+1}.xyz"
+            print(f"Extracting {args.samples} frames closest to TIC=({c1}, {c2}) -> {out_filename}")
             
-            print(f"Extracting & aligning {args.samples} frames closest to TIC=({c1_str}, {c2_str}) -> {state_dir}/")
-            
-            extract_and_align_frames(args.xyz, target_absolute_indices, ref_bb, state_dir, base_prefix, pdb_template)
-            
+            extract_frames_to_xyz(args.xyz, target_absolute_indices, out_filename)
         print("Extraction complete.")
-
 
 if __name__ == "__main__":
     main()
